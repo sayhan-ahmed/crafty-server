@@ -7,11 +7,7 @@ const app = express();
 const port = process.env.PORT || 4000;
 
 // Middleware
-app.use(
-  cors({
-    origin: "http://localhost:3000",
-  })
-);
+app.use(cors({ origin: "http://localhost:3000" }));
 app.use(express.json());
 
 // MongoDB URI
@@ -41,46 +37,108 @@ async function run() {
     await client.connect();
 
     const db = client.db("crafty");
-    const productsCollection = db.collection("products");
+    const productsCol = db.collection("products");
+    const ordersCol = db.collection("orders");
+    const usersCol = db.collection("users");
+
+    // === POST users in DB ===
+    app.post("/users", async (req, res) => {
+      const newUser = req.body;
+      const email = newUser.email;
+      const query = { email: email };
+
+      const existingUser = await usersCol.findOne(query);
+      if (existingUser) {
+        res.send({ message: "User exists!" });
+      } else {
+        const result = await usersCol.insertOne(newUser);
+        res.send(result);
+      }
+    });
 
     // === GET all products (public) ===
     app.get("/products", async (req, res) => {
-      const query = {};
-      const cursor = productsCollection.find(query).sort({ createdAt: -1 });
-      const result = await cursor.toArray();
+      const result = await productsCol.find().sort({ createdAt: -1 }).toArray();
       res.send(result);
     });
 
-    // === GET product by ID ===
+    // === GET product by ID (public)===
     app.get("/products/:id", async (req, res) => {
       const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await productsCollection.findOne(query);
-      if (!result) {
+      const result = await productsCol.findOne({ _id: new ObjectId(id) });
+      if (!result)
         return res.status(404).send({ message: "Product not found" });
-      }
       res.send(result);
     });
+
+    // ----------------------------------------------------------------- //
 
     // === POST new product (protected) ===
     app.post("/products", async (req, res) => {
-      const newProduct = req.body;
-      newProduct.createdAt = new Date();
+      const product = req.body;
+      const email = product.email;
 
-      const result = await productsCollection.insertOne(newProduct);
+      if (!email) {
+        return res
+          .status(401)
+          .send({ message: "Login required: email missing" });
+      }
+
+      product.createdAt = new Date();
+
+      // 1. Insert into products (public)
+      const prodResult = await productsCol.insertOne(product);
+
+      // 2. Insert into orders (my orders)
+      const orderDoc = {
+        userEmail: email,
+        productId: prodResult.insertedId,
+        ...product,
+      };
+      await ordersCol.insertOne(orderDoc);
+
+      res.send(prodResult);
+    });
+
+    // === GET my orders (protected) ===
+    app.get("/orders", async (req, res) => {
+      const email = req.query.email;
+      if (!email) {
+        return res
+          .status(401)
+          .send({ message: "Login required: email missing" });
+      }
+
+      const result = await ordersCol
+        .find({ userEmail: email })
+        .sort({ createdAt: -1 })
+        .toArray();
       res.send(result);
     });
 
-    // === DELETE product by ID (protected) ===
-    app.delete("/products/:id", async (req, res) => {
+    // === DELETE order (protected) ===
+    app.delete("/orders/:id", async (req, res) => {
       const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
+      const email = req.query.email;
 
-      const result = await productsCollection.deleteOne(query);
-      if (result.deletedCount === 0) {
-        return res.status(404).send({ message: "Product not found" });
+      if (!email) {
+        return res
+          .status(401)
+          .send({ message: "Login required: email missing" });
       }
-      res.send({ message: "Product deleted", deletedId: id });
+
+      const order = await ordersCol.findOne({
+        _id: new ObjectId(id),
+        userEmail: email,
+      });
+      if (!order) {
+        return res.status(403).send({ message: "Not owner or not found" });
+      }
+
+      await productsCol.deleteOne({ _id: order.productId });
+      await ordersCol.deleteOne({ _id: new ObjectId(id) });
+
+      res.send({ message: "Deleted", deletedId: id });
     });
 
     // === Ping MongoDB ===
