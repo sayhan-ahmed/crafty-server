@@ -77,6 +77,11 @@ async function run() {
       if (!product.email) {
         return res.status(401).send({ message: "User email required" });
       }
+      const ip =
+        req.headers["x-forwarded-for"]?.split(",")[0] ||
+        req.socket.remoteAddress;
+      product.userIp = ip;
+
       product.createdAt = new Date();
       const result = await productsCol.insertOne(product);
       res.send(result);
