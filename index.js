@@ -7,7 +7,7 @@ const app = express();
 const port = process.env.PORT || 4000;
 
 // Middleware
-app.use(cors);
+app.use(cors());
 app.use(express.json());
 
 // MongoDB URI
@@ -130,8 +130,6 @@ async function run() {
       if (!order) {
         return res.status(403).send({ message: "Not owner or not found" });
       }
-
-      await productsCol.deleteOne({ _id: order.productId });
       await ordersCol.deleteOne({ _id: new ObjectId(id) });
 
       res.send({ message: "Deleted", deletedId: id });
