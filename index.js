@@ -71,33 +71,29 @@ async function run() {
       res.send(result);
     });
 
+    // === POST product from UI ===
+    app.post("/products", async (req, res) => {
+      const product = req.body;
+      if (!product.email) {
+        return res.status(401).send({ message: "User email required" });
+      }
+      product.createdAt = new Date();
+      const result = await productsCol.insertOne(product);
+      res.send(result);
+    });
+
     // ----------------------------------------------------------------- //
 
     // === POST new product (protected) ===
-    app.post("/products", async (req, res) => {
-      const product = req.body;
-      const email = product.email;
-
+    app.post("/orders", async (req, res) => {
+      const orderData = req.body;
+      const email = orderData.email;
       if (!email) {
-        return res
-          .status(401)
-          .send({ message: "Login required: email missing" });
+        return res.status(401).send({ message: "Login required to order" });
       }
-
-      product.createdAt = new Date();
-
-      // 1. Insert into products (public)
-      const prodResult = await productsCol.insertOne(product);
-
-      // 2. Insert into orders (my orders)
-      const orderDoc = {
-        userEmail: email,
-        productId: prodResult.insertedId,
-        ...product,
-      };
-      await ordersCol.insertOne(orderDoc);
-
-      res.send(prodResult);
+      orderData.orderedAt = new Date();
+      const result = await ordersCol.insertOne(orderData);
+      res.send(result);
     });
 
     // === GET my orders (protected) ===
