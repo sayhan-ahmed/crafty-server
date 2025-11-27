@@ -7,7 +7,7 @@ const app = express();
 const port = process.env.PORT || 4000;
 
 // Middleware
-app.use(cors({ origin: "http://localhost:3000" }));
+app.use(cors);
 app.use(express.json());
 
 // MongoDB URI
@@ -84,7 +84,7 @@ async function run() {
 
     // ----------------------------------------------------------------- //
 
-    // === POST new product (protected) ===
+    // === POST new order (protected) ===
     app.post("/orders", async (req, res) => {
       const orderData = req.body;
       const email = orderData.email;
