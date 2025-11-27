@@ -31,6 +31,16 @@ app.get("/", (req, res) => {
   res.send("Crafty API is running!");
 });
 
+// Helper to create slugs
+const createSlug = (name) => {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
+
 async function run() {
   try {
     // Connect to MongoDB
@@ -62,12 +72,19 @@ async function run() {
       res.send(result);
     });
 
-    // === GET product by ID (public)===
+    // === GET product by ID or Slug ===
     app.get("/products/:id", async (req, res) => {
-      const id = req.params.id;
-      const result = await productsCol.findOne({ _id: new ObjectId(id) });
-      if (!result)
+      const param = req.params.id;
+      let query;
+      if (ObjectId.isValid(param)) {
+        query = { _id: new ObjectId(param) };
+      } else {
+        query = { slug: param };
+      }
+      const result = await productsCol.findOne(query);
+      if (!result) {
         return res.status(404).send({ message: "Product not found" });
+      }
       res.send(result);
     });
 
@@ -82,6 +99,7 @@ async function run() {
         req.socket.remoteAddress;
       product.userIp = ip;
 
+      product.slug = createSlug(product.name);
       product.createdAt = new Date();
       const result = await productsCol.insertOne(product);
       res.send(result);
